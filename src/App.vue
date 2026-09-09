@@ -40,20 +40,20 @@ onUnmounted(() => window.removeEventListener('storage', onEnvironmentChange))
 
 <template>
   <div class="passport" :style="variables" :data-theme="flow.theme.key">
-    <div class="mobile-shell" :class="{ 'legal-shell': isLegalPage }">
-      <header class="site-header"><div class="brand"><BrandMark /><div><strong>Hope</strong><span>通行证</span></div></div><span class="header-note">{{ isLegalPage ? '协议与隐私' : '一个 Hope 账号' }}</span></header>
-      <aside v-if="runtime.environment === 'local' && !isLegalPage" class="environment-banner" aria-label="当前环境"><span>本地开发环境</span><button @click="production">恢复正式环境</button></aside>
+    <div class="mobile-shell" :class="{ 'legal-shell': isLegalPage, 'auth-shell': !isLegalPage }">
+      <header v-if="isLegalPage" class="site-header"><div class="brand"><BrandMark /><div><strong>Hope</strong><span>通行证</span></div></div><span class="header-note">协议与隐私</span></header>
+      <header v-else class="auth-header">{{ flow.transactionId ? 'Hope 授权' : 'Hope 通行证' }}</header>
+      <aside v-if="runtime.environment === 'local' && !isLegalPage" class="environment-banner" aria-label="当前环境"><span>开发环境</span><button @click="production">恢复正式环境</button></aside>
       <main id="main-content">
         <section v-if="fatalError || (environmentChanged && !isLegalPage)" class="page result-page">
-          <div class="status-emblem status-emblem-muted"><AppIcon name="alert" :size="36" /></div>
+          <div class="status-emblem status-emblem-muted"><AppIcon name="alert" :size="32" /></div>
           <header class="page-heading"><h1>{{ environmentChanged ? '运行环境已切换' : '页面暂不可用' }}</h1></header>
           <InlineNotice tone="error">{{ environmentChanged ? '另一个页面修改了运行环境。当前操作已暂停，请重新打开登录页。' : fatalError }}</InlineNotice>
           <button class="button button-primary" @click="environmentChanged || runtime.error ? production() : reload()">{{ environmentChanged || runtime.error ? '回到正式环境登录' : '刷新页面' }}</button>
         </section>
         <RouterView v-else-if="ready" v-slot="{ Component, route: currentRoute }"><component :is="Component" :key="isLegalPage ? currentRoute.path : currentRoute.fullPath" /></RouterView>
-        <div v-else class="loading-status boot-loading" role="status"><span class="spinner" aria-hidden="true"></span>{{ isLegalPage ? '正在打开文档' : '正在准备登录页面' }}</div>
+        <div v-else class="loading-status boot-loading" role="status"><span class="spinner" aria-hidden="true"></span>{{ isLegalPage ? '正在加载…' : '正在登录…' }}</div>
       </main>
-      <footer class="site-footer"><span class="footer-rule"></span><p><AppIcon name="shield" :size="16" />你的授权，由你确认。</p><span>Hope 统一账号服务</span></footer>
     </div>
   </div>
 </template>
@@ -63,6 +63,5 @@ onUnmounted(() => window.removeEventListener('storage', onEnvironmentChange))
 @media (min-width: 900px) {
   .legal-shell { max-width: 1120px; padding-left: 48px; padding-right: 48px; }
   .legal-shell .site-header { padding-top: 40px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
-  .legal-shell .site-footer { padding-top: 40px; padding-bottom: 16px; }
 }
 </style>

@@ -2,7 +2,8 @@ import { authApi } from '../api/auth'
 import { isRecord } from '../api/types'
 import { runtime, scopedKey } from '../config/environment'
 import { isAppKey, isTransactionId } from '../stores/flow'
-import { readJson, writeStorage } from './storage'
+import { readJson, readStorage, writeStorage } from './storage'
+import { sessionEpoch } from './session'
 
 export const isWechat = /MicroMessenger/i.test(navigator.userAgent)
 const oauthKey = scopedKey('oauth')
@@ -17,12 +18,33 @@ interface OAuthContext {
   startedAt: number
 }
 
-export async function startOAuth(transactionId: string, appKey: string, accepted: boolean): Promise<void> {
-  if (!accepted) throw new Error('请阅读并同意用户协议和隐私政策。')
+export function preferSms(transactionId: string): void {
+  writeStorage('session', scopedKey(`oauth-attempt:${transactionId || 'standalone'}`), 'sms')
+  writeStorage('session', oauthKey, null)
+}
+
+export function canAutoOAuth(transactionId: string): boolean {
+  return !!transactionId && isWechat && !!runtime.wechatAppId &&
+    !readStorage('session', scopedKey(`oauth-attempt:${transactionId}`))
+}
+
+function assertOAuthTransport(): void {
+  if (runtime.environment !== 'local' &&
+    (window.location.protocol !== 'https:' || !window.isSecureContext || !window.crypto?.subtle)) {
+    throw new Error('正式环境微信授权需要 HTTPS 安全页面，请使用短信登录或联系管理员。')
+  }
+}
+
+export async function startOAuth(transactionId: string, appKey: string): Promise<void> {
   if (!isWechat) throw new Error('请在微信中打开，或使用短信验证码登录。')
   if (!runtime.wechatAppId) throw new Error('当前环境尚未配置微信公众号，请使用短信登录。')
   if (runtime.passportUrl !== window.location.origin) throw new Error('请从配置的 Passport 部署域名打开，以便安全校验微信授权。')
-  if (!window.isSecureContext || !crypto.subtle) throw new Error('微信授权需要 HTTPS 安全页面，请使用短信登录或联系管理员。')
+  assertOAuthTransport()
+  if (!window.crypto?.getRandomValues) throw new Error('当前浏览器无法安全生成授权状态，请更新浏览器或使用短信登录。')
+  const epoch = sessionEpoch.value
+  if (!writeStorage('session', scopedKey(`oauth-attempt:${transactionId || 'standalone'}`), 'attempted')) {
+    throw new Error('浏览器无法保存授权状态，请使用短信登录。')
+  }
   const state = Array.from(crypto.getRandomValues(new Uint8Array(24)), value => value.toString(16).padStart(2, '0')).join('')
   const context: OAuthContext = { state, transactionId, appKey, appid: runtime.wechatAppId,
     environment: runtime.environment, origin: window.location.origin, startedAt: Date.now() }
@@ -31,9 +53,10 @@ export async function startOAuth(transactionId: string, appKey: string, accepted
   if (runtime.environment === 'local') callback.searchParams.set('env', 'local')
   try {
     const target = await authApi.wechatUrl({ appid: context.appid, state, redirect_uri: callback.href })
+    if (epoch !== sessionEpoch.value || readOAuthContext()?.state !== state) throw new Error('本次微信登录已取消。')
     const parsed = new URL(target)
     if (parsed.searchParams.get('state') !== state || parsed.searchParams.get('appid') !== context.appid ||
-      parsed.searchParams.get('redirect_uri') !== callback.href) {
+      parsed.searchParams.get('redirect_uri') !== callback.href || parsed.searchParams.get('scope') !== 'snsapi_base') {
       throw new Error('微信授权参数不匹配，请联系管理员。')
     }
     window.location.assign(target)
@@ -54,12 +77,18 @@ export function readOAuthContext(): OAuthContext | null {
 }
 
 export async function finishOAuth(code: string, state: string) {
+  const epoch = sessionEpoch.value
   const context = readOAuthContext()
   writeStorage('session', oauthKey, null)
   if (!context || !state || state !== context.state) throw new Error('微信授权状态无效或已使用，请重新发起登录。')
-  if (!code || code.length > 512 || !crypto.subtle) throw new Error('未取得有效的微信授权，请重试或使用短信登录。')
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code))
-  const fingerprint = Array.from(new Uint8Array(hash), value => value.toString(16).padStart(2, '0')).join('')
+  if (!code || code.length > 512) throw new Error('未取得有效的微信授权，请重试或使用短信登录。')
+  assertOAuthTransport()
+  const bytes = new TextEncoder().encode(code)
+  const hash = window.crypto?.subtle
+    ? new Uint8Array(await window.crypto.subtle.digest('SHA-256', bytes))
+    : (await import('@noble/hashes/sha256')).sha256(bytes)
+  if (epoch !== sessionEpoch.value) throw new Error('账号已切换，请重新登录。')
+  const fingerprint = Array.from(hash, value => value.toString(16).padStart(2, '0')).join('')
   const usedKey = scopedKey('oauth-used')
   const cached = readJson('session', usedKey)
   const used = Array.isArray(cached) ? cached.filter((value): value is string => typeof value === 'string') : []
@@ -67,5 +96,7 @@ export async function finishOAuth(code: string, state: string) {
   if (!writeStorage('session', usedKey, JSON.stringify([...used.slice(-31), fingerprint]))) {
     throw new Error('无法记录授权状态，请使用短信登录。')
   }
-  return authApi.wechatLogin(context.appid, code)
+  const result = await authApi.wechatLogin(context.appid, code, context.transactionId)
+  if (epoch !== sessionEpoch.value) throw new Error('账号已切换，请重新登录。')
+  return result
 }

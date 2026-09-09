@@ -8,6 +8,7 @@ export interface PassportTheme {
     accentHover: string
     accentSoft: string
     onAccent: string
+    link: string
     text: string
     muted: string
     border: string
@@ -20,17 +21,17 @@ export interface PassportTheme {
 export const defaultTheme: PassportTheme = {
   key: 'hope',
   tokens: {
-    background: '#f4f8f7', surface: '#ffffff', field: '#f0f5f3',
-    accent: '#126750', accentHover: '#0b4e3c', accentSoft: '#e0efe7',
-    onAccent: '#ffffff', text: '#172f28', muted: '#566b63',
-    border: '#d4dfd9', danger: '#a53232', dangerSoft: '#fff0ef', radius: '14px',
+    background: '#ffffff', surface: '#ffffff', field: '#f7f7f8',
+    accent: '#fe2c55', accentHover: '#e51f48', accentSoft: '#fff0f3',
+    onAccent: '#ffffff', link: '#b8183b', text: '#161823', muted: '#686970',
+    border: '#e9e9eb', danger: '#b4233e', dangerSoft: '#fff0f3', radius: '8px',
   },
 }
 
 export const appThemes: Readonly<Record<string, PassportTheme>> = {}
 
 export function resolveTheme(appKey: string): PassportTheme {
-  return Object.hasOwn(appThemes, appKey) ? appThemes[appKey]! : defaultTheme
+  return Object.prototype.hasOwnProperty.call(appThemes, appKey) ? appThemes[appKey]! : defaultTheme
 }
 
 export function themeVariables(theme: PassportTheme): Record<string, string> {

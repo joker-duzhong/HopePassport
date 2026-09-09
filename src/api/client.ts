@@ -12,7 +12,7 @@ export class ApiError extends Error {
 
 interface RequestOptions {
   method?: 'GET' | 'POST'
-  body?: Record<string, string>
+  body?: Record<string, string | boolean>
   authenticated?: boolean
 }
 

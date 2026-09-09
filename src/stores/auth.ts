@@ -4,6 +4,9 @@ import { authApi } from '../api/auth'
 import { ApiError } from '../api/client'
 import type { LoginSession, User } from '../api/types'
 import { loginSession, sessionEpoch, sessionPersisted, setSession, updateUser } from '../lib/session'
+import { pendingIdentity, setPendingIdentity } from '../lib/pendingIdentity'
+import { scopedKey } from '../config/environment'
+import { writeStorage } from '../lib/storage'
 
 export class AccountDisabledError extends Error {
   constructor() { super('账号已被禁用，请联系管理员。') }
@@ -26,11 +29,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   function accept(session: LoginSession): void {
     assertActive(session.user)
+    writeStorage('session', scopedKey('oauth'), null)
+    setPendingIdentity(null)
     setSession(session)
     verified.value = true
   }
 
   function logout(): void {
+    writeStorage('session', scopedKey('oauth'), null)
+    setPendingIdentity(null)
     setSession(null)
     verified.value = false
   }
@@ -60,10 +67,15 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function bindPhone(phone: string, code: string): Promise<void> {
-    const current = await authApi.bindPhone(phone, code)
-    assertActive(current)
-    updateUser(current)
-    if (!current.phone || current.needs_phone_binding) throw new Error('手机号尚未绑定成功，请重试。')
+    const pending = pendingIdentity.value
+    if (!pending || Date.parse(pending.expires_at) <= Date.now()) {
+      setPendingIdentity(null)
+      throw new ApiError('微信验证已过期，请重新发起微信登录。', 410)
+    }
+    try { accept(await authApi.completeIdentity(pending.login_ticket, phone, code)) } catch (error) {
+      if (!(error instanceof ApiError) || ![400, 422, 429].includes(error.status)) setPendingIdentity(null)
+      throw error
+    }
   }
 
   return { user, isLoggedIn, needsBinding, verified, sessionPersisted, accept, logout, restore, bindPhone }

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { runtime } from './config/environment'
 import { AccountDisabledError, useAuthStore } from './stores/auth'
 import { useFlowStore } from './stores/flow'
+import { pendingFor } from './lib/pendingIdentity'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -33,8 +34,9 @@ router.beforeEach(async to => {
   if ((to.name === 'login' || to.name === 'bind') && flow.transactionId && flow.preparedId !== flow.transactionId) {
     return { name: 'scan', query: flow.query }
   }
-  if (to.name === 'bind' && !auth.isLoggedIn) return { name: 'login', query: flow.query }
-  if (to.name === 'bind' && !auth.needsBinding) return { name: flow.transactionId ? 'scan' : 'result', query: { ...flow.query, status: 'success' } }
+  const pending = pendingFor(flow.transactionId)
+  if (to.name === 'login' && pending) return { name: 'bind', query: flow.query }
+  if (to.name === 'bind' && !pending) return { name: auth.isLoggedIn ? flow.transactionId ? 'scan' : 'result' : 'login', query: { ...flow.query, status: 'success' } }
   if (to.name === 'login' && auth.isLoggedIn) {
     return { name: auth.needsBinding ? 'bind' : flow.transactionId ? 'scan' : 'result', query: { ...flow.query, status: 'success' } }
   }

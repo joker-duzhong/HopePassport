@@ -14,6 +14,5 @@ const phone = computed(() => {
   <div class="account-summary">
     <div class="avatar" aria-hidden="true">{{ Array.from(name)[0] }}</div>
     <div class="account-details"><strong>{{ name }}</strong><span>{{ phone }}</span></div>
-    <slot />
   </div>
 </template>

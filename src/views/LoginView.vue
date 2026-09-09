@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '../api/auth'
 import { ApiError, errorMessage } from '../api/client'
 import { runtime } from '../config/environment'
 import { useClock } from '../composables/useClock'
-import { isWechat, startOAuth } from '../lib/oauth'
+import { canAutoOAuth, isWechat, startOAuth } from '../lib/oauth'
 import { AccountDisabledError, useAuthStore } from '../stores/auth'
 import { useFlowStore } from '../stores/flow'
 import AppIcon from '../components/AppIcon.vue'
@@ -15,9 +15,9 @@ import InlineNotice from '../components/InlineNotice.vue'
 const auth = useAuthStore()
 const flow = useFlowStore()
 const router = useRouter()
-const accepted = ref(false)
+const accepted = ref(true)
 const busy = ref(false)
-const oauthBusy = ref(false)
+const oauthBusy = ref(canAutoOAuth(flow.transactionId))
 const error = ref('')
 const retryAt = ref(0)
 const oauthRetryAt = ref(0)
@@ -25,7 +25,7 @@ const now = useClock()
 const oauthWait = computed(() => Math.max(0, Math.ceil((oauthRetryAt.value - Math.max(now.value, Date.now())) / 1000)))
 
 async function login(phone: string, code: string): Promise<void> {
-  if (busy.value || oauthBusy.value || retryAt.value > Date.now()) return
+  if (busy.value || oauthBusy.value || !accepted.value || retryAt.value > Date.now()) return
   busy.value = true
   error.value = ''
   try {
@@ -44,34 +44,31 @@ async function wechat(): Promise<void> {
   if (busy.value || oauthBusy.value || oauthWait.value > 0) return
   error.value = ''
   oauthBusy.value = true
-  try { await startOAuth(flow.transactionId, flow.appKey, accepted.value) } catch (failure) {
+  try { await startOAuth(flow.transactionId, flow.appKey) } catch (failure) {
     error.value = errorMessage(failure)
     if (failure instanceof ApiError) oauthRetryAt.value = failure.retryAt
   } finally { oauthBusy.value = false }
 }
+
+onMounted(() => {
+  if (oauthBusy.value) { oauthBusy.value = false; void wechat() }
+})
 </script>
 
 <template>
-  <section class="page login-page">
-    <header class="page-heading">
-      <h1>一个账号，<br /><span class="accent-text">连接 Hope。</span></h1>
-      <p>欢迎使用 Hope 通行证。<br />登录后，继续你想做的事。</p>
-    </header>
-    <div v-if="flow.transactionId" class="flow-context">
-      <AppIcon name="device" :size="21" />
-      <span>登录后，确认授权<span v-if="flow.appName">「{{ flow.appName }}」</span><span v-else>另一设备</span></span>
-    </div>
-    <InlineNotice v-if="error" tone="error">{{ error }}</InlineNotice>
-    <PhoneForm v-model:accepted="accepted" :busy="busy || oauthBusy" label="登录 / 注册" agreement :retry-at="retryAt" @submit="login">
-      <p class="form-caption">未注册手机号验证成功后自动创建账号。</p>
-    </PhoneForm>
-    <template v-if="isWechat">
-      <div class="alternative-divider"><span>也可以使用</span></div>
-      <button class="button button-secondary" :disabled="busy || oauthBusy || oauthWait > 0 || !runtime.wechatAppId" @click="wechat">
-        <span v-if="oauthBusy" class="spinner" aria-hidden="true"></span><AppIcon v-else name="wechat" />
-        {{ oauthBusy ? '正在打开微信授权…' : oauthWait > 0 ? `${oauthWait} 秒后重试` : '微信账号登录' }}
-      </button>
-      <p v-if="!runtime.wechatAppId" class="form-caption">微信公众号尚未配置，请使用短信登录。</p>
+  <section class="page login-page" :class="{ 'page-with-agreement': !oauthBusy }">
+    <div v-if="oauthBusy" class="loading-status boot-loading" role="status"><span class="spinner" aria-hidden="true"></span>正在登录…</div>
+    <template v-else>
+      <header class="page-heading"><h1>手机号登录</h1><p v-if="flow.appName">继续登录 {{ flow.appName }}</p></header>
+      <InlineNotice v-if="error" tone="error">{{ error }}</InlineNotice>
+      <PhoneForm v-model:accepted="accepted" :busy="busy" label="登录" agreement :retry-at="retryAt" @submit="login">
+        <p class="form-caption">未注册手机号将自动注册</p>
+        <div v-if="isWechat && runtime.wechatAppId" class="secondary-action">
+          <button type="button" class="text-button" :disabled="busy || oauthWait > 0" @click="wechat">
+            <AppIcon name="wechat" :size="20" />{{ oauthWait > 0 ? '请稍后重试' : '微信登录' }}
+          </button>
+        </div>
+      </PhoneForm>
     </template>
   </section>
 </template>

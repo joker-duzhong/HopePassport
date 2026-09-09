@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { errorMessage } from '../api/client'
 import { finishOAuth, readOAuthContext } from '../lib/oauth'
+import { setPendingIdentity } from '../lib/pendingIdentity'
 import { AccountDisabledError, useAuthStore } from '../stores/auth'
 import { useFlowStore } from '../stores/flow'
 import AppIcon from '../components/AppIcon.vue'
@@ -24,8 +25,12 @@ onMounted(async () => {
   for (const [name, value] of Object.entries(flow.query)) clean.searchParams.set(name, value)
   window.history.replaceState(window.history.state, '', clean.pathname + clean.search)
   try {
-    auth.accept(await finishOAuth(code, state))
-    await router.replace({ name: flow.transactionId ? 'scan' : auth.needsBinding ? 'bind' : 'result', query: { ...flow.query, status: 'success' } })
+    const result = await finishOAuth(code, state)
+    if (result.status === 'PHONE_REQUIRED') {
+      auth.logout()
+      setPendingIdentity(result, flow.transactionId)
+    } else auth.accept(result)
+    await router.replace({ name: flow.transactionId ? 'scan' : result.status === 'PHONE_REQUIRED' ? 'bind' : 'result', query: { ...flow.query, status: 'success' } })
   } catch (failure) {
     if (failure instanceof AccountDisabledError) await router.replace({ name: 'result', query: { ...flow.query, status: 'disabled' } })
     else error.value = errorMessage(failure)
@@ -40,13 +45,12 @@ function retry(): void {
 
 <template>
   <section class="page result-page">
-    <div class="status-emblem" :class="{ 'status-emblem-muted': error }"><AppIcon :name="error ? 'alert' : 'wechat'" :size="36" /></div>
-    <header class="page-heading">
-      <h1>{{ error ? '微信登录未完成' : '正在登录微信账号' }}</h1>
-      <p>{{ error ? '你可以重新发起授权，或改用短信登录。' : '正在核对授权信息，请稍候。' }}</p>
-    </header>
-    <InlineNotice v-if="error" tone="error">{{ error }}</InlineNotice>
-    <button v-if="error" class="button button-primary" @click="retry">返回登录 / 重新授权<AppIcon name="arrow" :size="20" /></button>
-    <div v-else class="loading-status" role="status"><span class="spinner" aria-hidden="true"></span>正在验证授权</div>
+    <template v-if="error">
+      <div class="status-emblem status-emblem-muted"><AppIcon name="alert" :size="36" /></div>
+      <header class="page-heading"><h1>微信登录未完成</h1></header>
+      <InlineNotice tone="error">{{ error }}</InlineNotice>
+      <button class="button button-primary" @click="retry">重试登录</button>
+    </template>
+    <div v-else class="loading-status" role="status"><span class="spinner" aria-hidden="true"></span>正在登录…</div>
   </section>
 </template>

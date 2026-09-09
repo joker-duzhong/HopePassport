@@ -5,10 +5,9 @@ import { ApiError, errorMessage } from '../api/client'
 import { runtime, scopedKey } from '../config/environment'
 import { useClock } from '../composables/useClock'
 import { readStorage, writeStorage } from '../lib/storage'
-import AppIcon from './AppIcon.vue'
 
 const props = withDefaults(defineProps<{ busy: boolean; label: string; agreement?: boolean; accepted?: boolean; retryAt?: number }>(),
-  { agreement: false, accepted: false, retryAt: 0 })
+  { agreement: false, accepted: true, retryAt: 0 })
 const emit = defineEmits<{ submit: [phone: string, code: string]; 'update:accepted': [accepted: boolean] }>()
 const phone = ref('')
 const code = ref('')
@@ -89,23 +88,24 @@ function submit(): void {
       <p v-if="sentMessage" class="field-hint" role="status">{{ sentMessage }}</p>
       <p v-if="smsError" class="field-error" role="alert">{{ smsError }}</p>
     </div>
-    <div v-if="agreement" class="agreement-group">
-      <div class="agreement-row">
-        <label class="check-target">
-          <input type="checkbox" :checked="accepted" :disabled="busy" aria-label="我已阅读并同意用户协议和隐私政策" :aria-invalid="!!agreementError" @change="emit('update:accepted', ($event.target as HTMLInputElement).checked)" />
-        </label>
-        <p>我已阅读并同意
-          <a :href="runtime.termsUrl" target="_blank" rel="noopener noreferrer">用户协议</a>
-          和 <a :href="runtime.privacyUrl" target="_blank" rel="noopener noreferrer">隐私政策</a>
-        </p>
+    <div class="bottom-actions">
+      <button class="button button-primary" type="submit" :disabled="busy || sending || submitSeconds > 0 || (agreement && !accepted)">
+        <span v-if="busy" class="spinner" aria-hidden="true"></span>
+        <span>{{ busy ? '正在处理…' : submitSeconds > 0 ? '请稍后重试' : label }}</span>
+      </button>
+      <slot />
+      <div v-if="agreement" class="agreement-footer">
+        <div class="agreement-row">
+          <label class="check-target">
+            <input type="checkbox" :checked="accepted" :disabled="busy" aria-label="我已阅读并同意用户协议和隐私政策" :aria-invalid="!!agreementError" @change="emit('update:accepted', ($event.target as HTMLInputElement).checked)" />
+          </label>
+          <p>我已阅读并同意
+            <a :href="runtime.termsUrl" target="_blank" rel="noopener noreferrer">用户协议</a>
+            和 <a :href="runtime.privacyUrl" target="_blank" rel="noopener noreferrer">隐私政策</a>
+          </p>
+        </div>
+        <p v-if="agreementError" class="field-error" role="alert">{{ agreementError }}</p>
       </div>
-      <p v-if="agreementError" class="field-error" role="alert">{{ agreementError }}</p>
     </div>
-    <button class="button button-primary" type="submit" :disabled="busy || sending || submitSeconds > 0">
-      <span v-if="busy" class="spinner" aria-hidden="true"></span>
-      <span>{{ busy ? '正在处理…' : submitSeconds > 0 ? `${submitSeconds} 秒后重试` : label }}</span>
-      <AppIcon v-if="!busy && submitSeconds === 0" name="arrow" :size="20" />
-    </button>
-    <slot />
   </form>
 </template>

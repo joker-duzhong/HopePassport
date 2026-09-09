@@ -14,7 +14,9 @@ export interface User {
   needs_phone_binding: boolean
 }
 
-export interface LoginSession extends Tokens { user: User }
+export interface LoginSession extends Tokens { user: User; app_scope: 'passport' }
+export interface PendingIdentity { status: 'PHONE_REQUIRED'; login_ticket: string; expires_at: string }
+export type IdentityResult = PendingIdentity | (LoginSession & { status: 'AUTHENTICATED' })
 export const scanStatuses = ['WAITING_SCAN', 'PENDING', 'CONFIRMED', 'CONSUMED', 'CANCELLED', 'EXPIRED'] as const
 export type ScanStatus = typeof scanStatuses[number]
 export interface ScanTransaction {
@@ -53,8 +55,21 @@ export function parseUser(value: unknown): User {
 }
 
 export function parseLogin(value: unknown): LoginSession {
-  if (!isRecord(value)) throw new Error('登录响应格式异常，请重试。')
-  return { ...parseTokens(value), user: parseUser(value.user) }
+  if (!isRecord(value) || value.app_scope !== 'passport') throw new Error('登录版本或应用不匹配，请重新登录。')
+  const user = parseUser(value.user)
+  if (!user.phone || user.needs_phone_binding) throw new Error('请重新验证微信身份并绑定手机号。')
+  return { ...parseTokens(value), user, app_scope: 'passport' }
+}
+
+export function parseIdentity(value: unknown): IdentityResult {
+  if (!isRecord(value)) throw new Error('微信身份响应异常，请重新登录。')
+  if (value.status === 'AUTHENTICATED') return { ...parseLogin(value), status: 'AUTHENTICATED' }
+  if (value.status !== 'PHONE_REQUIRED' || typeof value.login_ticket !== 'string' ||
+    !/^[A-Za-z0-9_-]{32,128}$/.test(value.login_ticket) || typeof value.expires_at !== 'string' ||
+    !Number.isFinite(Date.parse(value.expires_at)) || Date.parse(value.expires_at) <= Date.now()) {
+    throw new Error('微信验证已失效，请重新登录。')
+  }
+  return { status: 'PHONE_REQUIRED', login_ticket: value.login_ticket, expires_at: value.expires_at }
 }
 
 export function parseScan(value: unknown): ScanTransaction {
