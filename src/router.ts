@@ -5,7 +5,7 @@ import { useFlowStore } from './stores/flow'
 import { pendingFor } from './lib/pendingIdentity'
 
 export const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', redirect: to => ({ path: '/login', query: to.query }) },
     { path: '/terms', name: 'terms', component: () => import('./views/TermsView.vue'), meta: { title: '用户协议', publicDocument: true } },

@@ -1,6 +1,7 @@
 import { readStorage, writeStorage } from '../lib/storage'
 
 export type Environment = 'production' | 'local'
+export const deploymentUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href
 const environmentKey = 'hope-passport:environment'
 const entryUrl = new URL(window.location.href)
 const environmentParams = entryUrl.searchParams.getAll('env')
@@ -35,11 +36,14 @@ function loadConfig() {
     const api = new URL(httpUrl(configured(prefix + 'API_BASE_URL') ||
       (environment === 'local' ? 'http://192.168.31.93:8000/' : 'https://api.lxy.fun'), environment === 'production'))
     if (api.search || api.hash || api.pathname !== '/') throw new Error('API 地址只能配置服务端源地址，不包含路径或参数。')
-    const passport = new URL(httpUrl(configured(prefix + 'PASSPORT_URL') || window.location.origin))
-    if (passport.search || passport.hash || passport.pathname !== '/') throw new Error('Passport 地址应为部署根地址。')
+    const passport = new URL(httpUrl(configured(prefix + 'PASSPORT_URL') || deploymentUrl))
+    if (!passport.pathname.endsWith('/')) passport.pathname += '/'
+    if (passport.search || passport.hash || passport.pathname !== new URL(deploymentUrl).pathname) {
+      throw new Error('Passport 地址须包含正确的部署目录，不含查询参数或片段。')
+    }
     return {
       apiBaseUrl: api.origin,
-      passportUrl: passport.origin,
+      passportUrl: passport.href,
       wechatAppId: configured(prefix + 'WECHAT_APP_ID'),
       error: invalidEnvironment ? '环境参数无效，仅支持 env=local；正式环境无需 URL 参数。' : '',
     }
@@ -49,12 +53,15 @@ function loadConfig() {
   }
 }
 
-export const runtime = Object.freeze({ environment, ...loadConfig(), termsUrl: '/terms', privacyUrl: '/privacy' })
+export const runtime = Object.freeze({ environment, ...loadConfig(),
+  termsUrl: new URL('terms', deploymentUrl).pathname,
+  privacyUrl: new URL('privacy', deploymentUrl).pathname,
+})
 export const scopedKey = (name: string) => `hope-passport:${environment}:${name}`
 
 export function restoreProduction(): void {
   writeStorage('local', environmentKey, null)
   writeStorage('session', scopedKey('flow'), null)
   writeStorage('session', scopedKey('oauth'), null)
-  window.location.replace(window.location.origin + '/login')
+  window.location.replace(new URL('login', deploymentUrl).href)
 }

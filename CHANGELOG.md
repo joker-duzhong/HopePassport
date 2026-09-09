@@ -1,5 +1,15 @@
 # 修订记录
 
+## 2026-09-09 Passport 子目录部署
+
+- 开发、预览和生产统一使用 `/passport/`：Vite 静态资源与 Vue Router history base 同步，内部路由和 API 前缀保持原有语义。
+- Passport 配置支持含部署目录的基址，自动补齐末尾斜线；留空采用当前源地址加 Vite base。协议链接、恢复正式环境和微信回调清理均保留挂载前缀，不跳到域名根目录。
+- OAuth 回调改为 `/passport/wechat/callback`，上下文同时绑定源地址和部署目录，保留随机 state、环境、AppID 和过期校验。旧版已发起的 OAuth 上下文须重新扫码。
+- 公开配置示例采用 `https://tool.lxyy.fun/passport/`。README 补充二维码、网页授权域名、回调源/CORS 区别及 Nginx 局部 SPA 回退、缓存和日志策略。不修改远程服务器、真实环境配置或域名下其他应用。
+- 验证：`npm run build`、16 项配置边界检查和 16 组临时 Playwright 场景通过；覆盖资源前缀、全部页面直接访问/刷新、协议跳转、HTTPS/本地 HTTP OAuth 往返、回调清理、部署目录状态校验及环境恢复。手机/PC 协议布局与既有授权回归通过，实际开发入口 `/passport/login?env=local` 返回 200 且入口资源包含前缀。
+- 两个仓库 `git diff --check` 通过，配套后端 239 项隔离测试通过。未发送真实微信/SMS 请求；Nginx 示例尚未在远程服务器执行，公众号配置及真机联调仍需部署后确认。
+- 文件：`vite.config.ts`、`src/router.ts`、`src/config/environment.ts`、`src/lib/oauth.ts`、`src/views/WechatCallbackView.vue`、`.env.example`、`README.md`、`CHANGELOG.md`。
+
 ## 2026-09-09 默认授权界面改版
 
 - 按用户提供的抖音授权页面参考，默认主题统一为白底、黑灰文字、浅灰输入/账号区域和玫红主按钮。保留 Hope 品牌与现有 app_key 主题注册入口，未知应用仍使用默认主题。

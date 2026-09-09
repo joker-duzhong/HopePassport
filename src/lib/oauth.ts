@@ -1,6 +1,6 @@
 import { authApi } from '../api/auth'
 import { isRecord } from '../api/types'
-import { runtime, scopedKey } from '../config/environment'
+import { deploymentUrl, runtime, scopedKey } from '../config/environment'
 import { isAppKey, isTransactionId } from '../stores/flow'
 import { readJson, readStorage, writeStorage } from './storage'
 import { sessionEpoch } from './session'
@@ -15,6 +15,7 @@ interface OAuthContext {
   appid: string
   environment: string
   origin: string
+  deploymentUrl: string
   startedAt: number
 }
 
@@ -38,7 +39,7 @@ function assertOAuthTransport(): void {
 export async function startOAuth(transactionId: string, appKey: string): Promise<void> {
   if (!isWechat) throw new Error('请在微信中打开，或使用短信验证码登录。')
   if (!runtime.wechatAppId) throw new Error('当前环境尚未配置微信公众号，请使用短信登录。')
-  if (runtime.passportUrl !== window.location.origin) throw new Error('请从配置的 Passport 部署域名打开，以便安全校验微信授权。')
+  if (runtime.passportUrl !== deploymentUrl) throw new Error('请从配置的 Passport 部署地址打开，以便安全校验微信授权。')
   assertOAuthTransport()
   if (!window.crypto?.getRandomValues) throw new Error('当前浏览器无法安全生成授权状态，请更新浏览器或使用短信登录。')
   const epoch = sessionEpoch.value
@@ -47,9 +48,9 @@ export async function startOAuth(transactionId: string, appKey: string): Promise
   }
   const state = Array.from(crypto.getRandomValues(new Uint8Array(24)), value => value.toString(16).padStart(2, '0')).join('')
   const context: OAuthContext = { state, transactionId, appKey, appid: runtime.wechatAppId,
-    environment: runtime.environment, origin: window.location.origin, startedAt: Date.now() }
+    environment: runtime.environment, origin: window.location.origin, deploymentUrl, startedAt: Date.now() }
   if (!writeStorage('session', oauthKey, JSON.stringify(context))) throw new Error('浏览器无法保存授权状态，请允许站点存储或使用短信登录。')
-  const callback = new URL('/wechat/callback', runtime.passportUrl)
+  const callback = new URL('wechat/callback', runtime.passportUrl)
   if (runtime.environment === 'local') callback.searchParams.set('env', 'local')
   try {
     const target = await authApi.wechatUrl({ appid: context.appid, state, redirect_uri: callback.href })
@@ -72,6 +73,7 @@ export function readOAuthContext(): OAuthContext | null {
     typeof value.transactionId !== 'string' || (value.transactionId && !isTransactionId(value.transactionId)) ||
     typeof value.appKey !== 'string' || (value.appKey && !isAppKey(value.appKey)) ||
     value.environment !== runtime.environment || value.origin !== window.location.origin ||
+    value.deploymentUrl !== deploymentUrl || value.deploymentUrl !== runtime.passportUrl ||
     value.appid !== runtime.wechatAppId || Date.now() - value.startedAt > validityMs || value.startedAt > Date.now() + 30_000) return null
   return value as unknown as OAuthContext
 }

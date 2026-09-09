@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { errorMessage } from '../api/client'
+import { deploymentUrl } from '../config/environment'
 import { finishOAuth, readOAuthContext } from '../lib/oauth'
 import { setPendingIdentity } from '../lib/pendingIdentity'
 import { AccountDisabledError, useAuthStore } from '../stores/auth'
@@ -21,7 +22,7 @@ onMounted(async () => {
   else flow.capture(route.query)
   const code = typeof route.query.code === 'string' ? route.query.code : ''
   const state = typeof route.query.state === 'string' ? route.query.state : ''
-  const clean = new URL('/wechat/callback', window.location.origin)
+  const clean = new URL('wechat/callback', deploymentUrl)
   for (const [name, value] of Object.entries(flow.query)) clean.searchParams.set(name, value)
   window.history.replaceState(window.history.state, '', clean.pathname + clean.search)
   try {

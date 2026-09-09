@@ -16,15 +16,17 @@ npm run preview
 
 开发端口为 5173，预览端口为 4173；端口占用时直接报错，不自动更换。正式产物在 `dist/`。没有引入测试框架；类型检查、构建和浏览器流程检查作为当前验证手段。
 
+开发、预览与生产统一挂载在 `/passport/`，由 `vite.config.ts` 的 `base` 控制。开发入口为 `http://localhost:5173/passport/`，生产入口为 `https://tool.lxyy.fun/passport/`；不要再使用根目录的 `/login` 或 `/scan`。API 环境选择与页面挂载目录相互独立。
+
 ## 环境选择
 
 默认正式环境，包括 `npm run dev`。不是根据 Vite 的 development/production 模式选择 API。
 
 | 访问方式 | 效果 |
 | --- | --- |
-| `/login` | 未选择过环境时使用 `https://api.lxy.fun`；有本地选择缓存时继续使用本地 |
-| `/login?env=local` | 选择 `http://192.168.31.93:8000/`，写入 `localStorage` |
-| `/scan?env=local&transaction_id=<UUID>` | 在本地环境处理扫码事务 |
+| `/passport/login` | 未选择过环境时使用 `https://api.lxy.fun`；有本地选择缓存时继续使用本地 |
+| `/passport/login?env=local` | 选择 `http://192.168.31.93:8000/`，写入 `localStorage` |
+| `/passport/scan?env=local&transaction_id=<UUID>` | 在本地环境处理扫码事务 |
 | 本地页面顶部「恢复正式环境」 | 清除环境选择、退出当前本地账号、丢弃当前事务，重新打开正式环境登录页 |
 
 不需要、也不支持 `env=prod`。环境参数只允许单个 `env=local`，未知或重复参数显示错误，不会拿 URL 参数拼接 API 地址。优先级：URL 中的本地选择 → localStorage 中的本地选择 → 正式环境。环境在页面启动时固定，切换通过整页重新加载完成；其他标签页修改环境时暂停本页操作。
@@ -35,7 +37,7 @@ npm run preview
 
 本地环境（`env=local` 或已缓存本地选择）允许 HTTP 网页执行微信登录；正式环境始终要求 HTTPS。HTTP 下缺少 `crypto.subtle` 时按需加载随项目构建的 `@noble/hashes` SHA-256 实现，code 仍只保存摘要；随机 state 仍使用 `crypto.getRandomValues`，没有不安全的随机数降级。
 
-本地联调需配置 `VITE_LOCAL_WECHAT_APP_ID`；`VITE_LOCAL_PASSPORT_URL` 留空时使用当前网页源地址，填写时须与实际打开地址完全相同。后端 `ENVIRONMENT` 必须为 `development`、`dev` 或 `local`，并在 `PASSPORT_CALLBACK_ORIGINS` 登记该 HTTP 源地址（含端口、不含路径和尾部斜线）。后端正式环境即便收到 `env=local` 也不接受 HTTP 回调。修改 Vite 环境变量后须重启开发服务。
+本地联调需配置 `VITE_LOCAL_WECHAT_APP_ID`；`VITE_LOCAL_PASSPORT_URL` 留空时使用当前网页源地址加 `/passport/`，填写时须包含该目录并与实际打开地址匹配。后端 `ENVIRONMENT` 必须为 `development`、`dev` 或 `local`；回调源白名单非空时须登记该 HTTP 源地址（含端口、不含路径和尾部斜线）。后端正式环境即便收到 `env=local` 也不接受 HTTP 回调。修改 Vite 环境变量后须重启开发服务。
 
 解除的是项目自身 HTTPS 限制，不替代公众号 AppID、网页授权域名、微信开发者工具及回调可达性要求；不能承诺任意局域网 IP 都能通过微信平台校验。HTTP 不加密登录数据，仅用于可信网络内的测试账号联调，正式服务继续使用 HTTPS。
 
@@ -46,14 +48,14 @@ npm run preview
 | 配置后缀 | 正式环境 / 本地环境前缀 | 说明 |
 | --- | --- | --- |
 | `API_BASE_URL` | `VITE_PROD_` / `VITE_LOCAL_` | API 源地址，不含 `/api/v1`、路径、查询参数 |
-| `PASSPORT_URL` | 同上 | Passport 根地址，未填写时使用当前页面源地址；本期部署在域名根路径 |
+| `PASSPORT_URL` | 同上 | Passport 部署基址，包含 `/passport/`；未填写时使用当前页面源地址加 Vite base。末尾斜线可省略，会自动补齐。路径须与 Vite base 相同，不能附带查询参数或片段 |
 | `WECHAT_APP_ID` | 同上 | 公众号 AppID；未配置时禁用微信登录，保留短信入口 |
 
-用户协议与隐私政策直接使用本站 `/terms`、`/privacy`，不需要环境变量配置。此前的 `VITE_*_TERMS_URL`、`VITE_*_PRIVACY_URL` 不再读取。按已确认的交互要求，短信登录、绑定和设备确认页协议默认勾选，可取消；取消后不能提交。默认勾选不能描述为用户主动勾选，正式发布前仍需合规审阅。静默验证微信身份不直接授权 PC，必须手动点击确认。
+用户协议与隐私政策直接使用本站 `/passport/terms`、`/passport/privacy`，不需要环境变量配置。此前的 `VITE_*_TERMS_URL`、`VITE_*_PRIVACY_URL` 不再读取。按已确认的交互要求，短信登录、绑定和设备确认页协议默认勾选，可取消；取消后不能提交。默认勾选不能描述为用户主动勾选，正式发布前仍需合规审阅。静默验证微信身份不直接授权 PC，必须手动点击确认。
 
 ## 公开协议页面
 
-- 用户协议：`/terms`；隐私政策：`/privacy`。外部业务可以直接链接 `https://你的部署域名/terms` 或 `https://你的部署域名/privacy`，不需要登录凭据、环境或扫码参数。
+- 用户协议：`https://tool.lxyy.fun/passport/terms`；隐私政策：`https://tool.lxyy.fun/passport/privacy`。外部业务可以直接链接，不需要登录凭据、环境或扫码参数。
 - 两页绕过账号恢复和扫码守卫，不请求账号或扫码 API；无效登录缓存、后端离线或 API 配置错误不会阻止阅读。
 - 手机使用单列正文和可折叠目录；PC 在 900px 及以上使用侧栏目录与限宽正文。支持目录锚点、页面刷新、两份文档互相切换和浏览器打印。
 - 登录页在新标签页打开协议，链接不附带事务 ID 或凭据，原表单与扫码上下文保留。
@@ -62,8 +64,10 @@ npm run preview
 
 ## 页面与流程
 
+以下为 Vue Router 内部路径，浏览器访问时均加 `/passport` 前缀，例如 `/login` 对应 `/passport/login`；业务 API 路径不加此前缀。
+
 - `/login`：中国大陆手机号（11 位）、字符串四位验证码、短信发送与倒计时。有效扫码事务在微信内且配置公众号时自动发起一次 `snsapi_base`，失败后保留手动微信重试和短信入口；独立登录页不自动跳转。
-- `/wechat/callback`：校验 sessionStorage 中的随机 state、环境、域名、AppID 和十分钟有效期；清除 URL 中的 code/state。提交前消耗状态并记录 code 指纹，失败后只允许重新授权，不重复提交旧 code。
+- `/wechat/callback`：校验 sessionStorage 中的随机 state、环境、源地址、部署目录、AppID 和十分钟有效期；清除 URL 中的 code/state 时保留 `/passport/` 前缀。提交前消耗状态并记录 code 指纹，失败后只允许重新授权，不重复提交旧 code。
 - `/bind-phone`：只保存临时身份票据，不提前保存 Token。验证手机后，新微信身份直接关联同手机号平台账号；历史账号冲突拒绝自动合并。票据失效或结果不明时返回登录重新验证微信身份；错误短信可继续重试。
 - `/scan?transaction_id=<UUID>`：查询事务、通知已扫码、引导登录/绑定、再次校验、手动确认。只显示应用名称、当前账号、协议和确认按钮，不显示取消、切换账号或扫码倒计时；内部保留时钟，到期自动显示过期状态。恢复前台时重新查询；提交前再次检查事务和当前账号。
 - `/result`：登录成功、授权确认/完成/取消/过期、禁用账号、参数和登录态异常。直接打开扫码结果链接会重新核对对应事务。
@@ -73,7 +77,7 @@ npm run preview
 
 ## 主题扩展
 
-入口示例：`/login?app_key=your_app` 或 `/scan?transaction_id=<UUID>&app_key=your_app`。
+入口示例：`/passport/login?app_key=your_app` 或 `/passport/scan?transaction_id=<UUID>&app_key=your_app`。
 
 `src/config/themes.ts` 提供 `PassportTheme`、`defaultTheme` 和 `appThemes` 注册表。后续按真实 app_key 在注册表中添加主题即可；所有页面通过 `themeVariables()` 消费统一 CSS 变量，不需要修改账号或扫码逻辑。
 
@@ -99,6 +103,7 @@ export const appThemes: Readonly<Record<string, PassportTheme>> = {
 - 不读写业务端 poll_token 或 exchange_code，不传递手机 Access Token 给原设备，不接收任意 redirect_url。
 - 不添加遥测、统计、第三方字体、远程主题或 CDN 依赖。无运行时控制台输出。不要把真实凭据放进截图、日志、URL 或问题反馈中。
 - sessionStorage 仍可被同源脚本读取，不能防御 XSS。部署应控制同源脚本、设置合理 CSP；OAuth 回调访问日志应移除 code/state 查询参数。
+- `/passport/` 不是安全隔离边界，同域名其他应用的脚本也能读取同源存储。只有可信站点内容才应共用该域名。迁移前已发起的旧版 OAuth 上下文不含部署目录，须重新扫码；不要重定向带 code/state 的旧回调来尝试复用。
 
 ## 后端与部署联调
 
@@ -113,9 +118,55 @@ export const appThemes: Readonly<Record<string, PassportTheme>> = {
 需后端/运维确认：
 1. 两个环境允许实际前端域名的 CORS，支持 Authorization、Content-Type；对前端暴露 `Retry-After` 响应头。
 2. 公众号授权域名、AppID 与 Passport 地址一致。必须在同一浏览器会话、同一源地址完成 OAuth，后端返回真实微信授权 URL。
-3. 本期前端部署在根路径；服务器给 `/login`、`/scan`、`/bind-phone`、`/wechat/callback`、`/result`、`/terms`、`/privacy` 做 SPA 回退到 `index.html`，否则外部直接访问或刷新会 404。
+3. 将 `dist/` 内的文件放到现有站点根目录下的 `passport/` 目录，服务器仅为 `/passport/` 路径做 SPA 回退到 `/passport/index.html`，不要修改域名下其他应用的回退规则。缺失静态资源返回 404，不回退 HTML。
 4. `index.html` 不长期缓存；带内容哈希的 assets 可长期缓存。使用 HTTPS。
 5. 上游业务端按需求.md实现创建事务、保存 poll_token、生成只含事务 ID 的二维码、轮询及一次性兑换。本地联调二维码可另带公开的 env=local，不能夹带任何秘密凭据。
+
+### 当前部署地址
+
+| 用途 | 地址或配置内容 |
+| --- | --- |
+| 授权中心入口 | `https://tool.lxyy.fun/passport/` |
+| PC 二维码内容 | `https://tool.lxyy.fun/passport/scan?transaction_id=<后端返回的UUID>` |
+| 微信网页回调 | `https://tool.lxyy.fun/passport/wechat/callback` |
+| 前端 `VITE_PROD_PASSPORT_URL` | `https://tool.lxyy.fun/passport/`，也可留空自动采用当前源地址与挂载目录 |
+| 前端 `VITE_LOCAL_PASSPORT_URL` | 建议留空，按实际开发 IP/端口推导 `/passport/` |
+| 公众号网页授权域名 | `tool.lxyy.fun`，不含协议或目录；确认配置的是网页授权域名 |
+| 后端回调源白名单条目及 CORS 源 | `https://tool.lxyy.fun`，不含 `/passport/` |
+
+后端明确接受 `/passport/wechat/callback` 和兼容旧版的 `/wechat/callback`，不接受任意子目录。现有非空回调源白名单需要加入新源地址；空白名单沿用服务端已有放行规则，正式部署建议配置非空白名单。这里只调整前后端代码和公开示例，不修改实际服务器、公众号后台或真实 `.env`。
+
+### Nginx 子目录示例
+
+将下面的 location 合并到 `tool.lxyy.fun` 现有 HTTPS server 中，沿用该站点真实的 `root`。目录对应关系须为：站点 root 下的 `passport/index.html` 与 `passport/assets/`。不要把 `dist` 文件夹本身再嵌套一层。
+
+```nginx
+location = /passport {
+    access_log off;
+    return 308 /passport/$is_args$args;
+}
+
+location = /passport/index.html {
+    access_log off;
+    add_header Cache-Control "no-cache" always;
+    try_files $uri =404;
+}
+
+location ^~ /passport/assets/ {
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+location ^~ /passport/ {
+    access_log off;
+    try_files $uri $uri/ /passport/index.html;
+}
+```
+
+示例关闭页面及回退 HTML 的访问日志，避免记录微信 code/state；CDN、WAF 和其他代理层也须脱敏。若已有响应安全头，合并 `add_header` 时保留现有安全头策略。公众号域名验证文件放在微信要求的域名根目录，不放进 `/passport/`，也不要被根站点的 SPA 回退规则拦截。
+
+部署顺序：先发布兼容新旧路径的后端，再部署 `dist/` 并更新业务端二维码入口。构建后检查 `/passport/login`、`/passport/scan`、`/passport/wechat/callback` 和协议地址直接打开/刷新均返回页面；构建成功不代表远程服务器已部署或公众号配置已完成。
 
 ## 目录
 
