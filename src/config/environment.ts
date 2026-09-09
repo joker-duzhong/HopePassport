@@ -34,7 +34,7 @@ function loadConfig() {
   const prefix = environment === 'local' ? 'VITE_LOCAL_' : 'VITE_PROD_'
   try {
     const api = new URL(httpUrl(configured(prefix + 'API_BASE_URL') ||
-      (environment === 'local' ? 'http://192.168.31.93:8000/' : 'https://api.lxy.fun'), environment === 'production'))
+      (environment === 'local' ? 'http://192.168.31.93:8000/' : 'https://api.lxyy.fun'), environment === 'production'))
     if (api.search || api.hash || api.pathname !== '/') throw new Error('API 地址只能配置服务端源地址，不包含路径或参数。')
     const passport = new URL(httpUrl(configured(prefix + 'PASSPORT_URL') || deploymentUrl))
     if (!passport.pathname.endsWith('/')) passport.pathname += '/'

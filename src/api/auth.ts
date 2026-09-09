@@ -2,7 +2,7 @@ import { request } from './client'
 import { isRecord, parseIdentity, parseLogin, parseScan, parseUser } from './types'
 
 export const authApi = {
-  sendSms: (phone: string) => request('/auth/sms/send', { method: 'POST', body: { phone } }),
+  sendSms: (phone: string) => request('/auth/sms/send', { method: 'POST', body: { phone, test: 'hope1' } }),
   phoneLogin: async (phone: string, code: string) => parseLogin(await request('/auth/phone/login', { method: 'POST', body: { phone, code } })),
   wechatLogin: async (appid: string, code: string, transactionId: string) => parseIdentity(await request('/auth/identity/h5', {
     method: 'POST', body: { appid, code, ...(transactionId ? { transaction_id: transactionId } : {}) },

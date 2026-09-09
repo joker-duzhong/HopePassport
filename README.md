@@ -24,7 +24,7 @@ npm run preview
 
 | 访问方式 | 效果 |
 | --- | --- |
-| `/passport/login` | 未选择过环境时使用 `https://api.lxy.fun`；有本地选择缓存时继续使用本地 |
+| `/passport/login` | 未选择过环境时使用 `https://api.lxyy.fun`；有本地选择缓存时继续使用本地 |
 | `/passport/login?env=local` | 选择 `http://192.168.31.93:8000/`，写入 `localStorage` |
 | `/passport/scan?env=local&transaction_id=<UUID>` | 在本地环境处理扫码事务 |
 | 本地页面顶部「恢复正式环境」 | 清除环境选择、退出当前本地账号、丢弃当前事务，重新打开正式环境登录页 |
