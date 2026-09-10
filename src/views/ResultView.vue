@@ -7,7 +7,6 @@ import { useFlowStore } from '../stores/flow'
 import { useScanStore } from '../stores/scan'
 import AppIcon from '../components/AppIcon.vue'
 import InlineNotice from '../components/InlineNotice.vue'
-import { returnUrl } from '../config/returnTargets'
 
 const auth = useAuthStore()
 const flow = useFlowStore()
@@ -45,7 +44,7 @@ onMounted(() => {
 })
 
 function returnToApp(): void {
-  if (flow.returnTarget && verifiedScanResult.value) window.location.replace(returnUrl(flow.returnTarget, flow.transactionId))
+  if (flow.returnTarget && verifiedScanResult.value) window.location.replace(flow.returnTarget.url)
 }
 
 async function retry(): Promise<void> {

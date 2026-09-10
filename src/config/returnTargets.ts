@@ -1,24 +1,23 @@
-export type ReturnEnvironment = 'local' | 'production'
+export const allowedReturnDomains: readonly string[] = ['lxyy.fun']
+export interface ReturnTarget { url: string }
 
-const callbackPath = '/auth/passport/callback'
-const origins: Record<ReturnEnvironment, readonly string[]> = {
-  production: ['https://nesttalk.lxyy.fun'],
-  local: ['http://localhost:5174', 'http://127.0.0.1:5174', 'http://192.168.31.93:5174'],
-}
-export interface ReturnTarget { url: string; state: string; environment: ReturnEnvironment }
-
-export function parseReturnTarget(url: unknown, state: unknown, environment: unknown, appKey: string): ReturnTarget | null {
-  if (url === undefined && state === undefined && environment === undefined) return null
-  if (appKey !== 'hope_teacher_logbook' || typeof url !== 'string' || typeof state !== 'string' ||
-      !/^[a-f0-9]{48}$/.test(state) || (environment !== 'local' && environment !== 'production')) throw new Error('授权返回参数无效。')
-  const target = new URL(url)
-  if (target.username || target.password || target.search || target.hash || target.pathname !== callbackPath ||
-      !origins[environment].includes(target.origin) || target.href !== url) throw new Error('授权返回地址未登记。')
-  return { url, state, environment }
+function isLocalHost(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]') return true
+  if (/^\[(?:f[cd][0-9a-f]{2}:|fe[89ab][0-9a-f]:)/i.test(hostname)) return true
+  const parts = hostname.split('.').map(Number)
+  if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) return false
+  const [first, second] = parts
+  return first === 127 || first === 10 || (first === 172 && second! >= 16 && second! <= 31) ||
+    (first === 192 && second === 168) || (first === 169 && second === 254)
 }
 
-export function returnUrl(target: ReturnTarget, transactionId: string): string {
-  const url = new URL(target.url)
-  url.hash = new URLSearchParams({ transaction_id: transactionId, state: target.state }).toString()
-  return url.href
+export function parseReturnTarget(back: unknown): ReturnTarget | null {
+  if (back === undefined) return null
+  if (typeof back !== 'string' || !back || /[\s\\]/.test(back)) throw new Error('授权返回参数无效。')
+  const target = new URL(back)
+  const local = isLocalHost(target.hostname)
+  const allowed = allowedReturnDomains.some(domain => target.hostname === domain || target.hostname.endsWith('.' + domain))
+  if (target.username || target.password || (!local && !allowed) ||
+      (target.protocol !== 'https:' && !(local && target.protocol === 'http:'))) throw new Error('授权返回域名未放行。')
+  return { url: target.href }
 }

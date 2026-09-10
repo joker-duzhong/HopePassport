@@ -1,40 +1,35 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseReturnTarget, returnUrl } from '../src/config/returnTargets.ts'
+import { parseReturnTarget } from '../src/config/returnTargets.ts'
 
-const state = 'a'.repeat(48)
-const appKey = 'hope_teacher_logbook'
-const path = '/auth/passport/callback'
-test('ordinary scan flows have no return target', () => {
-  assert.equal(parseReturnTarget(undefined, undefined, undefined, ''), null)
+test('ordinary scan flows have no back target', () => {
+  assert.equal(parseReturnTarget(undefined), null)
 })
-for (const [origin, environment] of [
-  ['https://nesttalk.lxyy.fun', 'production'], ['http://localhost:5174', 'local'],
-  ['http://127.0.0.1:5174', 'local'], ['http://192.168.31.93:5174', 'local'],
+for (const origin of [
+  'https://lxyy.fun', 'https://nesttalk.lxyy.fun', 'https://new.deep.lxyy.fun:8443',
+  'http://localhost:9000', 'http://app.localhost:8080', 'http://127.0.0.2:5174',
+  'http://10.2.3.4:8888', 'http://172.16.0.1', 'http://172.31.255.254', 'http://192.168.9.8',
+  'http://169.254.1.2', 'http://[::1]:8001', 'http://[fd12::1]:8001', 'http://[fe80::1]:8080',
 ]) {
-  test(`registered return origin ${origin}`, () => {
-    const target = parseReturnTarget(origin + path, state, environment, appKey)
-    const url = new URL(returnUrl(target, '00000000-0000-4000-8000-000000000001'))
-    assert.equal(url.search, '')
-    assert.equal(url.pathname, path)
-    assert.equal(new URLSearchParams(url.hash.slice(1)).get('state'), state)
+  test(`allows domain/local host and preserves the entire back URL: ${origin}`, () => {
+    const back = origin + '/arbitrary/callback?next=%2Fworkspace%3Ftab%3D1#state=abc&transaction_id=123'
+    assert.equal(parseReturnTarget(back).url, new URL(back).href)
   })
 }
-for (const url of [
-  'https://evil.test' + path, 'http://nesttalk.lxyy.fun' + path, 'https://nesttalk.lxyy.fun.evil.test' + path,
-  'https://nesttalk.lxyy.fun@evil.test' + path, 'https://user@nesttalk.lxyy.fun' + path,
-  'https://nesttalk.lxyy.fun/other', 'https://nesttalk.lxyy.fun' + path + '?next=https://evil.test',
-  'https://nesttalk.lxyy.fun' + path + '#fragment', 'https://nesttalk.lxyy.fun/auth/other/../passport/callback',
-  '//nesttalk.lxyy.fun' + path, 'javascript:alert(1)',
+for (const back of [
+  'https://evil.test/callback', 'https://evillxyy.fun/', 'https://lxyy.fun.evil.test/',
+  'https://lxyy.fun@evil.test/', 'https://user@lxyy.fun/', 'https://user:pass@localhost/',
+  'http://nesttalk.lxyy.fun/', 'ftp://localhost/', 'javascript:alert(1)', 'data:text/html,test',
+  '//lxyy.fun/path', '/relative', '', ' https://lxyy.fun/', 'https://lxyy.fun/\npath',
+  'https://lxyy.fun\\@evil.test/', 'http://172.15.0.1/', 'http://172.32.0.1/',
+  'http://192.169.1.1/', 'http://8.8.8.8/', 'https://localhost.evil.test/', 'http://[2001:db8::1]/',
 ]) {
-  test(`rejects unregistered or noncanonical target ${url}`, () => {
-    assert.throws(() => parseReturnTarget(url, state, 'production', appKey))
+  test(`rejects untrusted host or unsafe URL: ${JSON.stringify(back)}`, () => {
+    assert.throws(() => parseReturnTarget(back))
   })
 }
-test('rejects cross-environment, cross-app, partial and repeated parameters', () => {
-  assert.throws(() => parseReturnTarget('http://localhost:5174' + path, state, 'production', appKey))
-  assert.throws(() => parseReturnTarget('https://nesttalk.lxyy.fun' + path, state, 'local', appKey))
-  assert.throws(() => parseReturnTarget('https://nesttalk.lxyy.fun' + path, state, 'production', 'other_app'))
-  assert.throws(() => parseReturnTarget('https://nesttalk.lxyy.fun' + path, '', 'production', appKey))
-  assert.throws(() => parseReturnTarget(['https://nesttalk.lxyy.fun' + path], state, 'production', appKey))
+test('rejects empty, repeated and malformed back parameters', () => {
+  for (const value of [null, [], ['https://lxyy.fun/', 'https://lxyy.fun/'], 123, {}]) {
+    assert.throws(() => parseReturnTarget(value))
+  }
 })

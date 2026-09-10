@@ -1,5 +1,21 @@
 # 修订记录
 
+## 2026-09-11 完整 back、域名白名单与授权历史记录
+
+- 接收单个完整 back 地址，由业务前端决定返回路径、端口、查询和 fragment；不再写死台账回调地址、应用或本地/正式地址列表。按 hostname 标签边界放行 lxyy.fun 及子域名，以及 localhost、回环、私有和链路本地 IP；非本地要求 HTTPS，本地允许 HTTP，拒绝仿冒域名、用户信息、脚本协议、相对地址与重复 back。
+- back 上下文贯穿路由、OAuth state、手机号绑定及结果页，查询真实终态后返回原地址；不传 Token、poll_token 或 exchange_code。传入应用标识仍与真实事务核对。
+- back 不决定 API 环境；带 back 时按入口现有 env 选择，不继承旧环境缓存。API 地址从环境配置读取，不再提供硬编码地址兜底。
+- OAuth 的 assign 改为 replace；内部状态跳转、授权结果返回、过期页返回均替换当前历史项，避免授权后回退再次打开中间页。普通 PC 扫码不带 back，仍显式确认并停留结果页。Passport 的账号恢复及首次手机号绑定保留。
+- 验证：38 项 Node 单元测试、类型检查与生产构建通过；台账仓库完整 35 项浏览器回归通过，其中 9 项跨项目用例覆盖本地/正式、历史回退、首次绑定、短信恢复、域名与应用校验、完整 back 保留、兑换失败及普通扫码兼容。均使用隔离响应和模拟微信 OAuth，未调用真实短信或发布线上服务；实际微信真机和部署仍需验收。
+- 先发布 Passport 再发布台账 Web；不修改后端接口、真实凭据或公众号配置。
+
+本功能修改文件（含已提交的首次接入）：
+
+- `src/config/environment.ts`、`src/config/returnTargets.ts`、`src/lib/oauth.ts`
+- `src/stores/flow.ts`、`src/stores/scan.ts`
+- `src/views/LoginView.vue`、`src/views/WechatCallbackView.vue`、`src/views/ScanView.vue`、`src/views/ResultView.vue`
+- `tests/return-targets.test.mjs`、`package.json`、`README.md`、`CHANGELOG.md`
+
 ## 2026-09-09 Passport 子目录部署
 
 - 开发、预览和生产统一使用 `/passport/`：Vite 静态资源与 Vue Router history base 同步，内部路由和 API 前缀保持原有语义。

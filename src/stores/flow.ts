@@ -19,7 +19,7 @@ export const useFlowStore = defineStore('flow', () => {
   const query = computed(() => ({
     ...(transactionId.value ? { transaction_id: transactionId.value } : {}),
     ...(appKey.value ? { app_key: appKey.value } : {}),
-    ...(returnTarget.value ? { return_to: returnTarget.value.url, return_state: returnTarget.value.state, return_env: returnTarget.value.environment } : {}),
+    ...(returnTarget.value ? { back: returnTarget.value.url } : {}),
     ...(runtime.environment === 'local' ? { env: 'local' } : {}),
   }))
 
@@ -36,8 +36,8 @@ export const useFlowStore = defineStore('flow', () => {
     if ((id !== undefined && (typeof id !== 'string' || !isTransactionId(id))) ||
       (key !== undefined && (typeof key !== 'string' || !isAppKey(key)))) return false
     try {
-      const target = parseReturnTarget(params.return_to, params.return_state, params.return_env, typeof key === 'string' ? key : '')
-      if (target && (!id || target.environment !== runtime.environment)) return false
+      const target = parseReturnTarget(params.back)
+      if (target && !id) return false
       setContext(typeof id === 'string' ? id : '', typeof key === 'string' ? key : '', target)
     } catch { return false }
     return true

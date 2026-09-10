@@ -56,10 +56,7 @@ export async function startOAuth(transactionId: string, appKey: string, returnTa
   const callback = new URL('wechat/callback', runtime.passportUrl)
   if (runtime.environment === 'local') callback.searchParams.set('env', 'local')
   if (returnTarget) {
-    callback.searchParams.set('app_key', appKey)
-    callback.searchParams.set('return_to', returnTarget.url)
-    callback.searchParams.set('return_state', returnTarget.state)
-    callback.searchParams.set('return_env', returnTarget.environment)
+    callback.searchParams.set('back', returnTarget.url)
   }
   try {
     const target = await authApi.wechatUrl({ appid: context.appid, state, redirect_uri: callback.href })
@@ -69,7 +66,7 @@ export async function startOAuth(transactionId: string, appKey: string, returnTa
       parsed.searchParams.get('redirect_uri') !== callback.href || parsed.searchParams.get('scope') !== 'snsapi_base') {
       throw new Error('微信授权参数不匹配，请联系管理员。')
     }
-    window.location.assign(target)
+    window.location.replace(target)
   } catch (error) {
     writeStorage('session', oauthKey, null)
     throw error
@@ -87,8 +84,8 @@ export function readOAuthContext(): OAuthContext | null {
   if (value.returnTarget != null) {
     try {
       if (!isRecord(value.returnTarget)) return null
-      const target = parseReturnTarget(value.returnTarget.url, value.returnTarget.state, value.returnTarget.environment, String(value.appKey))
-      if (!target || target.environment !== runtime.environment) return null
+      const target = parseReturnTarget(value.returnTarget.url)
+      if (!target) return null
     } catch { return null }
   }
   return value as unknown as OAuthContext

@@ -12,7 +12,6 @@ import { runtime } from '../config/environment'
 import AccountSummary from '../components/AccountSummary.vue'
 import AppIcon from '../components/AppIcon.vue'
 import InlineNotice from '../components/InlineNotice.vue'
-import { returnUrl } from '../config/returnTargets'
 
 const auth = useAuthStore()
 const flow = useFlowStore()
@@ -98,6 +97,10 @@ async function confirm(): Promise<void> {
   } finally { busy.value = false }
 }
 
+function returnToApp(): void {
+  if (flow.returnTarget) window.location.replace(flow.returnTarget.url)
+}
+
 function onVisibility(): void {
   if (document.visibilityState === 'visible') void load()
 }
@@ -109,7 +112,7 @@ onUnmounted(() => { disposed = true; document.removeEventListener('visibilitycha
   <section v-if="expired && !busy" class="page result-page">
     <div class="status-emblem status-emblem-muted"><AppIcon name="clock" :size="36" /></div>
     <header class="page-heading"><h1>{{ flow.returnTarget ? '登录请求已过期' : '二维码已过期' }}</h1><p>{{ flow.returnTarget ? '请返回应用重新登录' : '请在原设备刷新二维码后重新扫码' }}</p></header>
-    <a v-if="flow.returnTarget" class="button button-primary" :href="returnUrl(flow.returnTarget, transactionId)">返回应用</a>
+    <button v-if="flow.returnTarget" class="button button-primary" @click="returnToApp">返回应用</button>
   </section>
   <section v-else class="page scan-page" :class="{ 'page-with-agreement': ready }">
       <div v-if="busy && !ready" class="loading-status boot-loading" role="status"><span class="spinner" aria-hidden="true"></span>正在验证…</div>

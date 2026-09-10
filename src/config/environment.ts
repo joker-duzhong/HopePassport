@@ -7,17 +7,15 @@ const environmentKey = 'hope-passport:environment'
 const entryUrl = new URL(window.location.href)
 const environmentParams = entryUrl.searchParams.getAll('env')
 const invalidEnvironment = environmentParams.length > 1 || environmentParams.some(value => value !== 'local')
-// An explicit, registered return flow overrides a previously cached local environment.
+// A back entry uses its explicit env selection instead of an older tab's cached choice.
 let returnEnvironment: Environment | undefined
 let returnError = ''
-if (['return_to', 'return_state', 'return_env'].some(key => entryUrl.searchParams.has(key))) {
+if (entryUrl.searchParams.has('back')) {
   try {
-    if (['return_to', 'return_state', 'return_env', 'app_key'].some(key => entryUrl.searchParams.getAll(key).length !== 1)) throw new Error('授权返回参数重复或缺失。')
-    const target = parseReturnTarget(entryUrl.searchParams.get('return_to'), entryUrl.searchParams.get('return_state'),
-      entryUrl.searchParams.get('return_env'), entryUrl.searchParams.get('app_key') ?? '')
-    if (!target || invalidEnvironment || (target.environment === 'production' && environmentParams.length)) throw new Error('授权环境不匹配。')
-    returnEnvironment = target.environment
-  } catch { returnError = '授权返回地址或环境无效，请重新打开台账登录。' }
+    if (entryUrl.searchParams.getAll('back').length !== 1 || !parseReturnTarget(entryUrl.searchParams.get('back'))) throw new Error('授权返回参数重复或缺失。')
+    if (invalidEnvironment) throw new Error('授权环境参数无效。')
+    returnEnvironment = environmentParams[0] === 'local' ? 'local' : 'production'
+  } catch { returnError = '授权返回地址或环境无效，请重新打开应用登录。' }
 }
 
 if (!returnError && returnEnvironment === 'production') {
@@ -48,8 +46,7 @@ function httpUrl(value: string, secureOnly = false): string {
 function loadConfig() {
   const prefix = environment === 'local' ? 'VITE_LOCAL_' : 'VITE_PROD_'
   try {
-    const api = new URL(httpUrl(configured(prefix + 'API_BASE_URL') ||
-      (environment === 'local' ? 'http://192.168.31.93:8000/' : 'https://api.lxyy.fun'), environment === 'production'))
+    const api = new URL(httpUrl(configured(prefix + 'API_BASE_URL'), environment === 'production'))
     if (api.search || api.hash || api.pathname !== '/') throw new Error('API 地址只能配置服务端源地址，不包含路径或参数。')
     const passport = new URL(httpUrl(configured(prefix + 'PASSPORT_URL') || deploymentUrl))
     if (!passport.pathname.endsWith('/')) passport.pathname += '/'

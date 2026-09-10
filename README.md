@@ -9,12 +9,13 @@ Vue 3 + TypeScript + Vite + Pinia 的统一账号与扫码授权页面。登录�
 ```powershell
 npm install
 npm run dev
+npm test
 npm run typecheck
 npm run build
 npm run preview
 ```
 
-开发端口为 5173，预览端口为 4173；端口占用时直接报错，不自动更换。正式产物在 `dist/`。没有引入测试框架；类型检查、构建和浏览器流程检查作为当前验证手段。
+开发端口为 5173，预览端口为 4173；端口占用时直接报错，不自动更换。正式产物在 `dist/`。使用 Node.js 24 内置测试、类型检查、构建和浏览器流程检查验证，不额外安装测试框架。
 
 开发、预览与生产统一挂载在 `/passport/`，由 `vite.config.ts` 的 `base` 控制。开发入口为 `http://localhost:5173/passport/`，生产入口为 `https://tool.lxyy.fun/passport/`；不要再使用根目录的 `/login` 或 `/scan`。API 环境选择与页面挂载目录相互独立。
 
@@ -29,7 +30,7 @@ npm run preview
 | `/passport/scan?env=local&transaction_id=<UUID>` | 在本地环境处理扫码事务 |
 | 本地页面顶部「恢复正式环境」 | 清除环境选择、退出当前本地账号、丢弃当前事务，重新打开正式环境登录页 |
 
-不需要、也不支持 `env=prod`。环境参数只允许单个 `env=local`，未知或重复参数显示错误，不会拿 URL 参数拼接 API 地址。优先级：URL 中的本地选择 → localStorage 中的本地选择 → 正式环境。环境在页面启动时固定，切换通过整页重新加载完成；其他标签页修改环境时暂停本页操作。
+不需要、也不支持 `env=prod`。环境参数只允许单个 `env=local`，未知或重复参数显示错误，不会拿 URL 参数拼接 API 地址。普通入口优先级：URL 中的本地选择 → localStorage 中的本地选择 → 正式环境；带合法 `back` 的入口使用其显式环境选择（有 env=local 选本地，否则选正式），不继承旧环境缓存，也不通过 back 的域名猜测 API 环境。环境在页面启动时固定，切换通过整页重新加载完成；其他标签页修改环境时暂停本页操作。
 
 环境键为 `hope-passport:environment`。可在开发者工具删除该键后重新打开不带 `env` 的地址恢复默认。
 
@@ -47,7 +48,7 @@ npm run preview
 
 | 配置后缀 | 正式环境 / 本地环境前缀 | 说明 |
 | --- | --- | --- |
-| `API_BASE_URL` | `VITE_PROD_` / `VITE_LOCAL_` | API 源地址，不含 `/api/v1`、路径、查询参数 |
+| `API_BASE_URL` | `VITE_PROD_` / `VITE_LOCAL_` | 必填 API 源地址，不含 `/api/v1`、路径、查询参数；代码不再提供本地或线上地址兜底 |
 | `PASSPORT_URL` | 同上 | Passport 部署基址，包含 `/passport/`；未填写时使用当前页面源地址加 Vite base。末尾斜线可省略，会自动补齐。路径须与 Vite base 相同，不能附带查询参数或片段 |
 | `WECHAT_APP_ID` | 同上 | 公众号 AppID；未配置时禁用微信登录，保留短信入口 |
 
@@ -63,6 +64,18 @@ npm run preview
 - 两份文档只覆盖 Hope 通行证的统一账号功能；外部业务引用它们，不会替代该业务自身需要提供的告知。
 
 ## 页面与流程
+
+### 微信内台账自动返回
+
+教师台账在微信内打开时可直接创建事务并进入本项目，授权中心继续通过微信验证身份、必要时绑定手机号，并保留一次“确认登录”。确认后自动返回台账，由台账兑换自己的业务 Token；普通 PC 扫码继续显示“确认在电脑上登录”和原结果页。
+
+- 业务端在扫码 URL 后追加单个 `back` 参数，内容是 URL 编码后的完整返回地址；应用自行决定路径、端口、查询参数和片段，Passport 不追加任何业务参数。教师台账从当前源地址生成回调，并在 back 的 fragment 中放事务 ID 和随机 state。
+- 先发布本项目，再发布台账 Web；台账服务器须将 `/auth/passport/callback` 回退到其 `index.html`。本次复用已有后端扫码接口。
+- 域名白名单集中在 `src/config/returnTargets.ts` 的 `allowedReturnDomains`，当前放行 `lxyy.fun` 及其任意层级子域名。另放行 localhost / *.localhost、127/8、10/8、172.16/12、192.168/16、169.254/16，以及 IPv6 回环、私有和链路本地地址；本地端口不受限制。手机需使用可达的局域网地址，更换本地 IP/端口无需修改回跳代码。
+- 白名单按 URL 解析后的 hostname 和完整标签边界匹配，拒绝 `evillxyy.fun`、`lxyy.fun.evil.test`、用户名密码、重复 back、相对地址和脚本协议。非本地必须 HTTPS，本地允许 HTTP。机制适用于任意真实扫码应用，传入 app_key 时仍与后端事务核对。
+- back 上下文穿过内部路由、OAuth state 和手机号绑定，OAuth 回调携带同一公开 back 以确定启动环境，实际返回上下文以本地已验证 OAuth state 为准。不发送 Passport Token、poll_token 或 exchange_code；业务端负责自己的回调校验及兑换。重新载入结果页先复核事务状态，不信任 URL 上的 success/confirmed。
+- 自动进入 OAuth、确认后页面跳转、自动返回及过期页的“返回应用”均使用 replace，避免本次受控流程留下额外历史项。普通 PC 扫码不传 back，确认后仍显示“请回到电脑继续”。微信内台账移除短信入口，Passport 的账号登录和首次手机号绑定保留。
+- `npm test` 使用 Node.js 24 内置测试运行白名单边界检查；跨项目浏览器用例位于 TeacherLogbook 的 `tests/web/passport.spec.ts`。先启动两项目开发服务、构建两项目，再在台账项目运行 `npm run test:web -- tests/web/passport.spec.ts`。全部身份和业务 API 使用隔离响应，不发送真实短信。
 
 以下为 Vue Router 内部路径，浏览器访问时均加 `/passport` 前缀，例如 `/login` 对应 `/passport/login`；业务 API 路径不加此前缀。
 
