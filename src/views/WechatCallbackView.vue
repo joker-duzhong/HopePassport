@@ -18,7 +18,7 @@ const error = ref('')
 
 onMounted(async () => {
   const context = readOAuthContext()
-  if (context) flow.setContext(context.transactionId, context.appKey)
+  if (context) flow.setContext(context.transactionId, context.appKey, context.returnTarget ?? null)
   else flow.capture(route.query)
   const code = typeof route.query.code === 'string' ? route.query.code : ''
   const state = typeof route.query.state === 'string' ? route.query.state : ''

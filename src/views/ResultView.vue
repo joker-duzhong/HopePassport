@@ -7,6 +7,7 @@ import { useFlowStore } from '../stores/flow'
 import { useScanStore } from '../stores/scan'
 import AppIcon from '../components/AppIcon.vue'
 import InlineNotice from '../components/InlineNotice.vue'
+import { returnUrl } from '../config/returnTargets'
 
 const auth = useAuthStore()
 const flow = useFlowStore()
@@ -38,8 +39,14 @@ onMounted(() => {
   const expected = status.value.toUpperCase()
   if (scan.transaction?.transaction_id.toLowerCase() !== flow.transactionId.toLowerCase() || scan.transaction.status !== expected) {
     void router.replace({ name: 'scan', query: flow.query })
+    return
   }
+  returnToApp()
 })
+
+function returnToApp(): void {
+  if (flow.returnTarget && verifiedScanResult.value) window.location.replace(returnUrl(flow.returnTarget, flow.transactionId))
+}
 
 async function retry(): Promise<void> {
   if (busy.value) return
@@ -59,7 +66,8 @@ async function retry(): Promise<void> {
 <template>
   <section v-if="!isScanResult || verifiedScanResult" class="page result-page">
     <div class="status-emblem" :class="{ 'status-emblem-muted': !content.positive }"><AppIcon :name="content.icon" :size="38" /></div>
-    <header class="page-heading"><h1>{{ content.title }}</h1><p>{{ content.description }}</p></header>
+    <header class="page-heading"><h1>{{ content.title }}</h1><p>{{ flow.returnTarget && verifiedScanResult ? '正在返回应用…' : content.description }}</p></header>
+    <button v-if="flow.returnTarget && verifiedScanResult" class="button button-primary" @click="returnToApp">返回应用</button>
     <InlineNotice v-if="!auth.sessionPersisted && status === 'success'">浏览器无法保存登录状态，刷新或关闭页面后可能需要重新登录。</InlineNotice>
     <InlineNotice v-if="error" tone="error">{{ error }}</InlineNotice>
     <button v-if="status === 'session-error'" class="button button-primary" :disabled="busy" @click="retry"><span v-if="busy" class="spinner" aria-hidden="true"></span>{{ busy ? '正在验证…' : '重试' }}</button>

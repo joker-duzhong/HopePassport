@@ -11,6 +11,7 @@ export const useScanStore = defineStore('scan', () => {
   function accept(id: string, value: ScanTransaction): ScanTransaction {
     if (value.transaction_id.toLowerCase() !== id.toLowerCase()) throw new Error('扫码事务不匹配，请返回原设备重新扫码。')
     if (flow.transactionId !== id) throw new Error('扫码事务已切换，请重试。')
+    if (flow.returnTarget && value.app && value.app.app_key !== flow.appKey) throw new Error('授权应用与返回地址不匹配，请重新登录。')
     transaction.value = value
     if (value.app) {
       flow.appName = value.app.name

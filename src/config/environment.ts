@@ -1,4 +1,5 @@
 import { readStorage, writeStorage } from '../lib/storage'
+import { parseReturnTarget } from './returnTargets'
 
 export type Environment = 'production' | 'local'
 export const deploymentUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href
@@ -6,14 +7,28 @@ const environmentKey = 'hope-passport:environment'
 const entryUrl = new URL(window.location.href)
 const environmentParams = entryUrl.searchParams.getAll('env')
 const invalidEnvironment = environmentParams.length > 1 || environmentParams.some(value => value !== 'local')
+// An explicit, registered return flow overrides a previously cached local environment.
+let returnEnvironment: Environment | undefined
+let returnError = ''
+if (['return_to', 'return_state', 'return_env'].some(key => entryUrl.searchParams.has(key))) {
+  try {
+    if (['return_to', 'return_state', 'return_env', 'app_key'].some(key => entryUrl.searchParams.getAll(key).length !== 1)) throw new Error('授权返回参数重复或缺失。')
+    const target = parseReturnTarget(entryUrl.searchParams.get('return_to'), entryUrl.searchParams.get('return_state'),
+      entryUrl.searchParams.get('return_env'), entryUrl.searchParams.get('app_key') ?? '')
+    if (!target || invalidEnvironment || (target.environment === 'production' && environmentParams.length)) throw new Error('授权环境不匹配。')
+    returnEnvironment = target.environment
+  } catch { returnError = '授权返回地址或环境无效，请重新打开台账登录。' }
+}
 
-if (!invalidEnvironment && environmentParams[0] === 'local') {
+if (!returnError && returnEnvironment === 'production') {
+  writeStorage('local', environmentKey, null)
+} else if (!returnError && !invalidEnvironment && (returnEnvironment === 'local' || environmentParams[0] === 'local')) {
   writeStorage('local', environmentKey, 'local')
 }
 
-const environment: Environment = !invalidEnvironment &&
+const environment: Environment = returnEnvironment ?? (!invalidEnvironment &&
   (environmentParams[0] === 'local' || readStorage('local', environmentKey) === 'local')
-  ? 'local' : 'production'
+  ? 'local' : 'production')
 
 function configured(name: string): string {
   const value: unknown = import.meta.env[name]
@@ -45,7 +60,7 @@ function loadConfig() {
       apiBaseUrl: api.origin,
       passportUrl: passport.href,
       wechatAppId: configured(prefix + 'WECHAT_APP_ID'),
-      error: invalidEnvironment ? '环境参数无效，仅支持 env=local；正式环境无需 URL 参数。' : '',
+      error: returnError || (invalidEnvironment ? '环境参数无效，仅支持 env=local；正式环境无需 URL 参数。' : ''),
     }
   } catch (error) {
     return { apiBaseUrl: '', passportUrl: '', wechatAppId: '',

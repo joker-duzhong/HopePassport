@@ -44,7 +44,7 @@ async function wechat(): Promise<void> {
   if (busy.value || oauthBusy.value || oauthWait.value > 0) return
   error.value = ''
   oauthBusy.value = true
-  try { await startOAuth(flow.transactionId, flow.appKey) } catch (failure) {
+  try { await startOAuth(flow.transactionId, flow.appKey, flow.returnTarget) } catch (failure) {
     error.value = errorMessage(failure)
     if (failure instanceof ApiError) oauthRetryAt.value = failure.retryAt
   } finally { oauthBusy.value = false }

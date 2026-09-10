@@ -4,6 +4,8 @@ import { deploymentUrl, runtime, scopedKey } from '../config/environment'
 import { isAppKey, isTransactionId } from '../stores/flow'
 import { readJson, readStorage, writeStorage } from './storage'
 import { sessionEpoch } from './session'
+import { parseReturnTarget } from '../config/returnTargets'
+import type { ReturnTarget } from '../config/returnTargets'
 
 export const isWechat = /MicroMessenger/i.test(navigator.userAgent)
 const oauthKey = scopedKey('oauth')
@@ -17,6 +19,7 @@ interface OAuthContext {
   origin: string
   deploymentUrl: string
   startedAt: number
+  returnTarget?: ReturnTarget | null
 }
 
 export function preferSms(transactionId: string): void {
@@ -36,7 +39,7 @@ function assertOAuthTransport(): void {
   }
 }
 
-export async function startOAuth(transactionId: string, appKey: string): Promise<void> {
+export async function startOAuth(transactionId: string, appKey: string, returnTarget: ReturnTarget | null = null): Promise<void> {
   if (!isWechat) throw new Error('请在微信中打开，或使用短信验证码登录。')
   if (!runtime.wechatAppId) throw new Error('当前环境尚未配置微信公众号，请使用短信登录。')
   if (runtime.passportUrl !== deploymentUrl) throw new Error('请从配置的 Passport 部署地址打开，以便安全校验微信授权。')
@@ -48,10 +51,16 @@ export async function startOAuth(transactionId: string, appKey: string): Promise
   }
   const state = Array.from(crypto.getRandomValues(new Uint8Array(24)), value => value.toString(16).padStart(2, '0')).join('')
   const context: OAuthContext = { state, transactionId, appKey, appid: runtime.wechatAppId,
-    environment: runtime.environment, origin: window.location.origin, deploymentUrl, startedAt: Date.now() }
+    environment: runtime.environment, origin: window.location.origin, deploymentUrl, startedAt: Date.now(), returnTarget }
   if (!writeStorage('session', oauthKey, JSON.stringify(context))) throw new Error('浏览器无法保存授权状态，请允许站点存储或使用短信登录。')
   const callback = new URL('wechat/callback', runtime.passportUrl)
   if (runtime.environment === 'local') callback.searchParams.set('env', 'local')
+  if (returnTarget) {
+    callback.searchParams.set('app_key', appKey)
+    callback.searchParams.set('return_to', returnTarget.url)
+    callback.searchParams.set('return_state', returnTarget.state)
+    callback.searchParams.set('return_env', returnTarget.environment)
+  }
   try {
     const target = await authApi.wechatUrl({ appid: context.appid, state, redirect_uri: callback.href })
     if (epoch !== sessionEpoch.value || readOAuthContext()?.state !== state) throw new Error('本次微信登录已取消。')
@@ -75,6 +84,13 @@ export function readOAuthContext(): OAuthContext | null {
     value.environment !== runtime.environment || value.origin !== window.location.origin ||
     value.deploymentUrl !== deploymentUrl || value.deploymentUrl !== runtime.passportUrl ||
     value.appid !== runtime.wechatAppId || Date.now() - value.startedAt > validityMs || value.startedAt > Date.now() + 30_000) return null
+  if (value.returnTarget != null) {
+    try {
+      if (!isRecord(value.returnTarget)) return null
+      const target = parseReturnTarget(value.returnTarget.url, value.returnTarget.state, value.returnTarget.environment, String(value.appKey))
+      if (!target || target.environment !== runtime.environment) return null
+    } catch { return null }
+  }
   return value as unknown as OAuthContext
 }
 
