@@ -17,7 +17,7 @@ npm run preview
 
 开发端口为 5173，预览端口为 4173；端口占用时直接报错，不自动更换。正式产物在 `dist/`。使用 Node.js 24 内置测试、类型检查、构建和浏览器流程检查验证，不额外安装测试框架。
 
-开发、预览与生产统一挂载在 `/passport/`，由 `vite.config.ts` 的 `base` 控制。开发入口为 `http://localhost:5173/passport/`，生产入口为 `https://tool.lxyy.fun/passport/`；不要再使用根目录的 `/login` 或 `/scan`。API 环境选择与页面挂载目录相互独立。
+开发、预览与生产统一挂载在 `/passport/`，由 `vite.config.ts` 的 `base` 控制。开发入口为 `http://192.168.31.93:5173/passport/`，生产入口为 `https://tool.lxyy.fun/passport/`；不要再使用根目录的 `/login` 或 `/scan`。API 环境选择与页面挂载目录相互独立。
 
 ## 环境选择
 
